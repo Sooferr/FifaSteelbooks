@@ -960,13 +960,14 @@ function renderShelf() {
     countEl.className = "col-count";
     countEl.textContent = row.cols;
 
+    const minCol = row.entries.length;
     const minusBtn = document.createElement("button");
     minusBtn.className = "col-btn";
     minusBtn.textContent = "−";
     minusBtn.title = "Fewer per row";
-    minusBtn.disabled = row.cols <= 1;
+    minusBtn.disabled = row.cols <= minCol;
     minusBtn.addEventListener("click", () => {
-      rowSizes[ri] = Math.max(1, row.cols - 1);
+      rowSizes[ri] = Math.max(minCol, row.cols - 1);
       saveRowSizes();
       renderShelf();
     });
