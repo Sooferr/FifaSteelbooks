@@ -240,6 +240,99 @@
   .entry.hidden-entry { opacity: 0.35; background: none !important; }
   .entry.hidden-entry .hide-btn { opacity: 1; color: var(--accent); }
 
+  /* List view toggle */
+  .view-toggle {
+    max-width: 900px;
+    margin: 0 auto 12px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .view-btn {
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Image grid in list tab */
+  .list-image-section {
+    max-width: 900px;
+    margin: 0 auto 20px;
+  }
+  .list-image-header {
+    background: var(--header-bg);
+    color: #fff;
+    padding: 10px 16px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+  }
+  .list-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+  }
+  .list-image-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    position: relative;
+  }
+  .list-image-art {
+    width: 100%;
+    border-radius: 5px;
+    border: 2px solid var(--border);
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .list-image-art.g1 { aspect-ratio: 2/2.6; }
+  .list-image-art.g2 { aspect-ratio: 2/2.36; }
+  .list-image-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .list-image-card:hover .list-image-art { transform: translateY(-2px); border-color: var(--text-muted); }
+  .list-image-art.is-owned { border-color: var(--accent); }
+  .list-image-art.is-hidden { opacity: 0.3; }
+  .list-image-label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+  .list-image-check {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    border: 1.5px solid rgba(255,255,255,0.6);
+    background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .list-image-art.is-owned .list-image-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
   /* Shelf — fixed card sizes */
   :root {
     --card-w: 110px;
@@ -294,6 +387,16 @@
   }
   .shelf-card:active { cursor: grabbing; }
   .shelf-card.dragging { opacity: 0.4; }
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.85;
+    transform: scale(1.05);
+    transition: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    border-radius: 6px;
+  }
   .shelf-card.drag-over .card-art { border-color: var(--accent); }
   .card-art {
     width: var(--card-w);
@@ -401,6 +504,10 @@
 <!-- LIST TAB -->
 <div class="tab-content active" id="tab-list">
   <div class="stats-panel" id="statsPanel"></div>
+  <div class="view-toggle">
+    <button class="view-btn active" id="viewList">☰ List</button>
+    <button class="view-btn" id="viewImages">⊞ Images</button>
+  </div>
   <div class="filter-bar" id="ownerFilter">
     <button class="filter-btn active" data-filter="all">All</button>
     <button class="filter-btn" data-filter="owned">Owned</button>
@@ -689,6 +796,104 @@ renderList();
   catBar.appendChild(btn);
 });
 
+let listView = "list"; // "list" or "images"
+document.getElementById("viewList").addEventListener("click", () => {
+  listView = "list";
+  document.getElementById("viewList").classList.add("active");
+  document.getElementById("viewImages").classList.remove("active");
+  renderList();
+});
+document.getElementById("viewImages").addEventListener("click", () => {
+  listView = "images";
+  document.getElementById("viewImages").classList.add("active");
+  document.getElementById("viewList").classList.remove("active");
+  renderList();
+});
+
+function renderImageGrid() {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  data.forEach(group => {
+    const visibleEntries = group.entries.filter(e => {
+      if (!e.id) return false;
+      if (!showHidden && hidden.has(e.id)) return false;
+      if (activeCategory !== "all" && e.cat !== activeCategory) return false;
+      if (filter === "owned") return owned.has(e.id) && !hidden.has(e.id);
+      if (filter === "unowned") return !owned.has(e.id) && !hidden.has(e.id);
+      return true;
+    });
+    if (!visibleEntries.length) return;
+
+    const section = document.createElement("div");
+    section.className = "list-image-section";
+
+    const header = document.createElement("div");
+    header.className = "list-image-header";
+    const ownedCount = visibleEntries.filter(e => owned.has(e.id) && !hidden.has(e.id)).length;
+    header.innerHTML = `<span>${group.game}</span><span style="font-size:0.75rem;font-weight:400;color:var(--accent)">${ownedCount} / ${visibleEntries.length}</span>`;
+    section.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = "list-image-grid";
+
+    visibleEntries.forEach(entry => {
+      const isOwned = owned.has(entry.id);
+      const isHidden = hidden.has(entry.id);
+      const isG1 = G1_GAMES.includes(group.game);
+      const imgSrc = cardImages[entry.id];
+      const rarity = rarityOf[entry.id] || "common";
+      const palIdx = data.findIndex(g => g.game === group.game) % 18;
+
+      const card = document.createElement("div");
+      card.className = "list-image-card";
+
+      const art = document.createElement("div");
+      art.className = `list-image-art ${isG1 ? "g1" : "g2"}${isOwned ? " is-owned" : ""}${isHidden ? " is-hidden" : ""}`;
+
+      if (imgSrc) {
+        const img = document.createElement("img");
+        img.src = imgSrc;
+        art.appendChild(img);
+      } else {
+        art.style.background = `var(--surface2)`;
+        art.innerHTML = `<div style="padding:6px;text-align:center;font-size:0.6rem;color:var(--text-muted)">${entry.label}</div>`;
+      }
+
+      const check = document.createElement("div");
+      check.className = "list-image-check";
+      check.innerHTML = isOwned ? `<svg width="10" height="8" viewBox="0 0 13 10" fill="none"><path d="M1.5 5L5 8.5L11.5 1.5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` : "";
+      art.appendChild(check);
+
+      const dot = document.createElement("div");
+      dot.className = `rarity-dot ${rarity}`;
+      art.appendChild(dot);
+
+      const label = document.createElement("div");
+      label.className = "list-image-label";
+      label.textContent = entry.label;
+
+      art.addEventListener("click", () => {
+        if (isHidden) return;
+        if (owned.has(entry.id)) owned.delete(entry.id);
+        else owned.add(entry.id);
+        save();
+        renderStats();
+        renderList();
+      });
+
+      card.appendChild(art);
+      card.appendChild(label);
+      grid.appendChild(card);
+    });
+
+    section.appendChild(grid);
+    list.appendChild(section);
+  });
+
+  renderStats();
+}
+
 let filter = "all";
 let showHidden = false;
 document.getElementById("ownerFilter").querySelectorAll(".filter-btn").forEach(btn => {
@@ -727,6 +932,7 @@ function updateGameCount(section, entries) {
 }
 
 function renderList() {
+  if (listView === "images") { renderImageGrid(); return; }
   const list = document.getElementById("list");
   list.innerHTML = "";
 
@@ -879,6 +1085,59 @@ function makeCard(entry, getAllCards) {
   name.textContent = entry.label;
   card.appendChild(art);
   card.appendChild(name);
+
+  // Touch drag support
+  let touchGhost = null;
+  let touchOffsetX = 0, touchOffsetY = 0;
+
+  card.addEventListener("touchstart", e => {
+    const touch = e.touches[0];
+    const rect = card.getBoundingClientRect();
+    touchOffsetX = touch.clientX - rect.left;
+    touchOffsetY = touch.clientY - rect.top;
+
+    // Clone card as ghost
+    touchGhost = card.cloneNode(true);
+    touchGhost.className = "drag-ghost";
+    touchGhost.style.width = rect.width + "px";
+    touchGhost.style.height = rect.height + "px";
+    touchGhost.style.left = (touch.clientX - touchOffsetX) + "px";
+    touchGhost.style.top = (touch.clientY - touchOffsetY) + "px";
+    document.body.appendChild(touchGhost);
+    card.classList.add("dragging");
+    dragSrcId = entry.id;
+  }, { passive: true });
+
+  card.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (touchGhost) {
+      touchGhost.style.left = (touch.clientX - touchOffsetX) + "px";
+      touchGhost.style.top = (touch.clientY - touchOffsetY) + "px";
+    }
+  }, { passive: false });
+
+  card.addEventListener("touchend", e => {
+    card.classList.remove("dragging");
+    if (touchGhost) { touchGhost.remove(); touchGhost = null; }
+
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const targetCard = el ? el.closest(".shelf-card") : null;
+    if (!targetCard || Number(targetCard.dataset.id) === dragSrcId) return;
+
+    const targetId = Number(targetCard.dataset.id);
+    const allCards = [...getAllCards()];
+    const currentOrder = allCards.map(c => Number(c.dataset.id));
+    const fromIdx = currentOrder.indexOf(dragSrcId);
+    const toIdx = currentOrder.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    currentOrder.splice(fromIdx, 1);
+    currentOrder.splice(toIdx, 0, dragSrcId);
+    shelfOrder = currentOrder;
+    saveShelfOrder(shelfOrder);
+    renderShelf();
+  });
 
   let didDrag = false;
   card.addEventListener("dragstart", e => {
