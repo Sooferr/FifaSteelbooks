@@ -880,21 +880,18 @@ function makeCard(entry, getAllCards) {
   card.appendChild(art);
   card.appendChild(name);
 
-  card.addEventListener("click", () => {
-    const src = cardImages[entry.id];
-    if (!src) return;
-    const lb = document.getElementById("lightbox");
-    document.getElementById("lightboxImg").src = src;
-    lb.classList.add("open");
-  });
+  let didDrag = false;
   card.addEventListener("dragstart", e => {
+    didDrag = true;
     dragSrcId = entry.id;
     card.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(entry.id));
   });
   card.addEventListener("dragend", () => {
     card.classList.remove("dragging");
     document.querySelectorAll(".shelf-card").forEach(c => c.classList.remove("drag-over"));
+    setTimeout(() => { didDrag = false; }, 0);
   });
   card.addEventListener("dragover", e => {
     e.preventDefault();
@@ -904,16 +901,26 @@ function makeCard(entry, getAllCards) {
   });
   card.addEventListener("drop", e => {
     e.preventDefault();
-    if (dragSrcId === entry.id) return;
-    const allCards = getAllCards();
+    const srcId = Number(e.dataTransfer.getData("text/plain"));
+    if (srcId === entry.id) return;
+    const allCards = [...getAllCards()];
     const currentOrder = allCards.map(c => Number(c.dataset.id));
-    const fromIdx = currentOrder.indexOf(dragSrcId);
+    const fromIdx = currentOrder.indexOf(srcId);
     const toIdx   = currentOrder.indexOf(entry.id);
+    if (fromIdx === -1 || toIdx === -1) return;
     currentOrder.splice(fromIdx, 1);
-    currentOrder.splice(toIdx, 0, dragSrcId);
+    currentOrder.splice(toIdx, 0, srcId);
     shelfOrder = currentOrder;
     saveShelfOrder(shelfOrder);
     renderShelf();
+  });
+  card.addEventListener("click", () => {
+    if (didDrag) return;
+    const src = cardImages[entry.id];
+    if (!src) return;
+    const lb = document.getElementById("lightbox");
+    document.getElementById("lightboxImg").src = src;
+    lb.classList.add("open");
   });
   return card;
 }
