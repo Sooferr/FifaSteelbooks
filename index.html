@@ -515,6 +515,7 @@
     <button class="filter-btn" data-filter="hidden" id="hiddenToggle">Show Hidden</button>
   </div>
   <div class="filter-bar secondary" id="categoryFilter"></div>
+  <div class="filter-bar secondary" id="rarityFilter"></div>
   <div id="list"></div>
 </div>
 
@@ -774,28 +775,66 @@ function renderStats() {
   `).join("");
 }
 
-// Category filter
-let activeCategory = "all";
+// Multi-select category filter
+let activeCategories = new Set(); // empty = all
 const catBar = document.getElementById("categoryFilter");
-[{ key: "all", label: "All Categories" }, ...allCats.map(c => ({ key: c, label: c }))].forEach(({ key, label }) => {
-  const btn = document.createElement("button");
-  btn.className = "filter-btn" + (key === "all" ? " active" : "");
-  btn.textContent = label;
-  btn.dataset.cat = key;
-  btn.addEventListener("click", () => {
-    activeCategory = key;
-    catBar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-    const lb = document.getElementById("lightbox");
-document.getElementById("lightboxClose").addEventListener("click", () => lb.classList.remove("open"));
-lb.addEventListener("click", e => { if (e.target === lb) lb.classList.remove("open"); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") lb.classList.remove("open"); });
 
-renderList();
+function buildCatBar() {
+  catBar.innerHTML = "";
+  const allBtn = document.createElement("button");
+  allBtn.className = "filter-btn" + (activeCategories.size === 0 ? " active" : "");
+  allBtn.textContent = "All Categories";
+  allBtn.addEventListener("click", () => {
+    activeCategories.clear();
+    buildCatBar();
+    renderList();
   });
-  catBar.appendChild(btn);
-});
+  catBar.appendChild(allBtn);
 
+  allCats.forEach(cat => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (activeCategories.has(cat) ? " active" : "");
+    btn.textContent = cat;
+    btn.addEventListener("click", () => {
+      if (activeCategories.has(cat)) activeCategories.delete(cat);
+      else activeCategories.add(cat);
+      buildCatBar();
+      renderList();
+    });
+    catBar.appendChild(btn);
+  });
+}
+// Multi-select rarity filter
+let activeRarities = new Set(); // empty = all
+const rarityBar = document.getElementById("rarityFilter");
+
+function buildRarityBar() {
+  rarityBar.innerHTML = "";
+  const allBtn = document.createElement("button");
+  allBtn.className = "filter-btn" + (activeRarities.size === 0 ? " active" : "");
+  allBtn.textContent = "All Rarities";
+  allBtn.addEventListener("click", () => {
+    activeRarities.clear();
+    buildRarityBar();
+    renderList();
+  });
+  rarityBar.appendChild(allBtn);
+
+  Object.entries(RARITIES).forEach(([key, val]) => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (activeRarities.has(key) ? " active" : "");
+    btn.textContent = val.label;
+    btn.addEventListener("click", () => {
+      if (activeRarities.has(key)) activeRarities.delete(key);
+      else activeRarities.add(key);
+      buildRarityBar();
+      renderList();
+    });
+    rarityBar.appendChild(btn);
+  });
+}
+let filter = "all";
+let showHidden = false;
 let listView = "list"; // "list" or "images"
 document.getElementById("viewList").addEventListener("click", () => {
   listView = "list";
@@ -818,7 +857,8 @@ function renderImageGrid() {
     const visibleEntries = group.entries.filter(e => {
       if (!e.id) return false;
       if (!showHidden && hidden.has(e.id)) return false;
-      if (activeCategory !== "all" && e.cat !== activeCategory) return false;
+      if (activeCategories.size > 0 && !activeCategories.has(e.cat)) return false;
+      if (activeRarities.size > 0 && !activeRarities.has(rarityOf[e.id] || "common")) return false;
       if (filter === "owned") return owned.has(e.id) && !hidden.has(e.id);
       if (filter === "unowned") return !owned.has(e.id) && !hidden.has(e.id);
       return true;
@@ -894,8 +934,6 @@ function renderImageGrid() {
   renderStats();
 }
 
-let filter = "all";
-let showHidden = false;
 document.getElementById("ownerFilter").querySelectorAll(".filter-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     if (btn.dataset.filter === "hidden") {
@@ -940,15 +978,15 @@ function renderList() {
     let visibleEntries = group.entries.filter(e => {
       if (e.sep) return true;
       if (!showHidden && hidden.has(e.id)) return false;
-      if (activeCategory !== "all" && e.cat !== activeCategory) return false;
+      if (activeCategories.size > 0 && !activeCategories.has(e.cat)) return false;
+      if (activeRarities.size > 0 && !activeRarities.has(rarityOf[e.id] || "common")) return false;
       if (filter === "owned")   return owned.has(e.id) && !hidden.has(e.id);
       if (filter === "unowned") return !owned.has(e.id) && !hidden.has(e.id);
       return true;
     });
 
     const hasReal = visibleEntries.some(e => e.id);
-    if (!hasReal && filter !== "all") return;
-    if (!hasReal && activeCategory !== "all") return;
+    if (!hasReal) return;
 
     const section = document.createElement("div");
     section.className = "game-section" + (collapsed.has(group.game) ? " collapsed" : "");
@@ -1250,6 +1288,9 @@ function renderShelf() {
 
   shelf.appendChild(wrap);
 }
+
+buildCatBar();
+buildRarityBar();
 
 const lb = document.getElementById("lightbox");
 document.getElementById("lightboxClose").addEventListener("click", () => lb.classList.remove("open"));
